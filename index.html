@@ -201,12 +201,12 @@
             sage: { name: '賢者スライム', color: '#9b59b6', eyeColor: '#f1c40f', description: '全てのアップグレードコストが15%減少', apply: (gd) => { gd.clickUpgradeCost = Math.ceil(gd.clickUpgradeCost * 0.85); gd.autoClickerCost = Math.ceil(gd.autoClickerCost * 0.85); } },
             crystal: { name: 'クリスタルスライム', color: '#1abc9c', eyeColor: '#ffffff', description: '全てのコイン獲得量が1.5倍になる', apply: (gd) => { gd.coinMultiplier = (gd.coinMultiplier || 1) * 1.5; } },
             volcano: { name: '火山スライム', color: '#e67e22', eyeColor: '#f1c40f', description: '自動生成の性能が3倍になる', apply: (gd) => { gd.autoPower = Math.ceil(gd.autoPower * 3) || 5; } },
-            galaxy: { name: 'ギャラクシースライム', color: '#34495e', eyeColor: '#ecf0f1', description: 'クリックと自動生成の両方が2倍', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 2); gd.autoPower = Math.ceil(gd.autoPower * 2) || 4; } },
-            sun: { name: '太陽スライム', color: '#f39c12', eyeColor: '#ffffff', description: 'フィーバーポーションの効果時間が60秒になる', apply: (gd) => { gd.feverDuration = 60; } },
-            dragon: { name: 'ドラゴンスライム', color: '#c0392b', eyeColor: '#f1c40f', description: 'クリックパワーが5倍になる', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 5); } },
-            archmage: { name: '大賢者スライム', color: '#8e44ad', eyeColor: '#f1c40f', description: 'EXP獲得量が常に1.5倍になる', apply: (gd) => { gd.expMultiplier = (gd.expMultiplier || 1) * 1.5; } },
-            god: { name: '神スライム', color: '#ecf0f1', eyeColor: '#f1c40f', description: '全ての生産効率が3倍になる', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 3); gd.autoPower = Math.ceil(gd.autoPower * 3) || 10; } },
-            genesis: { name: '創世スライム', color: '#95a5a6', eyeColor: '#ffffff', description: 'レベルアップに必要な経験値が25%減少', apply: (gd) => { gd.expRequirementMultiplier = (gd.expRequirementMultiplier || 1) * 0.75; } }
+            galaxy: { name: 'ギャラクシースライム', color: '#34495e', eyeColor: '#ecf0f1', description: 'クリックと自動生成の両方が2.5倍', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 2.5); gd.autoPower = Math.ceil(gd.autoPower * 2.5) || 5; } },
+            sun: { name: '太陽スライム', color: '#f39c12', eyeColor: '#ffffff', description: 'フィーバー時間が60秒になり、コイン獲得量1.2倍', apply: (gd) => { gd.feverDuration = 60; gd.coinMultiplier = (gd.coinMultiplier || 1) * 1.2; } },
+            dragon: { name: 'ドラゴンスライム', color: '#c0392b', eyeColor: '#f1c40f', description: 'クリックパワーが7倍になる', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 7); } },
+            archmage: { name: '大賢者スライム', color: '#8e44ad', eyeColor: '#f1c40f', description: 'EXP獲得量が1.5倍になり、コストが5%減少', apply: (gd) => { gd.expMultiplier = (gd.expMultiplier || 1) * 1.5; gd.clickUpgradeCost = Math.ceil(gd.clickUpgradeCost * 0.95); gd.autoClickerCost = Math.ceil(gd.autoClickerCost * 0.95);} },
+            god: { name: '神スライム', color: '#ecf0f1', eyeColor: '#f1c40f', description: '全ての生産効率が5倍になる', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 5); gd.autoPower = Math.ceil(gd.autoPower * 5) || 20; } },
+            genesis: { name: '創世スライム', color: '#95a5a6', eyeColor: '#ffffff', description: '必要経験値が25%減少し、自動クリッカー性能2倍', apply: (gd) => { gd.expRequirementMultiplier = (gd.expRequirementMultiplier || 1) * 0.75; gd.items.autoClickerLevel = Math.ceil(gd.items.autoClickerLevel * 2) || 10; } }
         };
 
         const evolutionTiers = { 
@@ -390,7 +390,10 @@
                     finalLevel += Math.ceil(finalLevel * 0.1) || 1;
                 }
             } else { // autoClicker
-                finalLevel = gameData.items.autoClickerLevel + amount;
+                finalLevel = gameData.items.autoClickerLevel;
+                for (let i = 0; i < amount; i++) {
+                    finalLevel += Math.ceil(finalLevel * 0.15) || 1;
+                }
             }
             return finalLevel;
         }
@@ -450,7 +453,8 @@
                 }
             } else { // autoClicker
                 for (let i = 0; i < amount; i++) {
-                     gameData.items.autoClickerLevel++;
+                     const baseIncrease = Math.ceil(gameData.items.autoClickerLevel * 0.15) || 1;
+                     gameData.items.autoClickerLevel += baseIncrease;
                      gameData.autoClickerCost = Math.ceil(gameData.autoClickerCost * 1.75);
                 }
             }
@@ -587,4 +591,5 @@
     </script>
 </body>
 </html>
+
 
