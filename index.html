@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スライム進化ゲーム</title>
+    <script src="https://cdn/tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            touch-action: manipulation; /* ダブルタップズームを無効化 */
+        }
+        .slime {
+            transition: transform 0.1s ease-out;
+            will-change: transform;
+            filter: drop-shadow(0 5px 15px rgba(0, 0, 0, 0.3));
+        }
+        .slime-clicked {
+            transform: scale(0.95);
+        }
+        .floating-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: floatUp 1.5s ease-out forwards;
+            pointer-events: none;
+            text-shadow: 0px 2px 4px rgba(0,0,0,0.5);
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) translateY(0); }
+            100% { opacity: 0; transform: translate(-50%, -150px) translateY(-50px); }
+        }
+        .shop-item:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .tab-button.active {
+            background-color: #3b82f6; /* bg-blue-600 */
+            color: white;
+            border-bottom: 2px solid #60a5fa;
+        }
+        .tab-button {
+             border-bottom: 2px solid transparent;
+        }
+        .progress-bar-container {
+            width: 100%;
+            background-color: #4b5563;
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #60a5fa, #3b82f6);
+            transition: width 0.3s ease-in-out;
+            text-align: center;
+            color: white;
+            font-weight: bold;
+        }
+        .modal-content {
+            animation: zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes zoomIn {
+            from { transform: scale(0.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4 overflow-hidden">
+
+    <div id="game-container" class="w-full max-w-md mx-auto bg-gray-800 rounded-2xl shadow-2xl p-6 flex flex-col gap-4">
+        <!-- ヘッダー情報 -->
+        <header class="text-center">
+            <h1 id="slime-name" class="text-3xl font-extrabold text-blue-400">ベビースライム</h1>
+            <p class="text-lg text-gray-300">レベル: <span id="level">1</span></p>
+        </header>
+
+        <!-- 通貨と進捗バー -->
+        <div class="w-full text-center space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+                <p class="text-xl font-bold text-yellow-300">🪙 <span id="coins">0</span></p>
+                <p class="text-xl font-bold text-blue-300">✨ <span id="exp">0</span></p>
+            </div>
+            <div class="progress-bar-container h-4 shadow-inner">
+                <div id="exp-bar" class="progress-bar" style="width: 0%;"></div>
+            </div>
+            <p class="text-sm text-gray-400">次のレベルまで: <span id="exp-to-next-level">10</span> EXP</p>
+        </div>
+        
+        <!-- スライム表示エリア -->
+        <div id="slime-container" class="relative w-full h-64 flex items-center justify-center cursor-pointer select-none">
+            <div id="boost-timer" class="absolute top-0 left-0 bg-yellow-500 text-black font-bold px-3 py-1 rounded-full text-sm hidden animate-pulse">
+                フィーバー中: <span id="fever-time-left">0</span>s
+            </div>
+            <div id="slime" class="slime w-40 h-40"></div>
+        </div>
+
+        <!-- ステータス情報 -->
+        <div class="grid grid-cols-2 gap-2 text-center text-sm bg-gray-700 p-3 rounded-lg">
+            <div>
+                <p class="font-bold text-blue-300">クリック</p>
+                <p><span id="click-power-exp">1</span> EXP / <span id="click-power-coin">1</span> Coin</p>
+            </div>
+            <div>
+                <p class="font-bold text-green-300">自動クリッカー</p>
+                <p><span id="auto-power-exp">0</span> EXP/s / <span id="auto-power-coin">0</span> Coin/s</p>
+            </div>
+        </div>
+
+        <!-- タブ切り替え -->
+        <div class="flex border-b border-gray-600">
+            <button id="tab-shop" class="tab-button flex-1 py-2 font-bold transition-colors duration-200 active">アップグレード</button>
+            <button id="tab-item-shop" class="tab-button flex-1 py-2 font-bold transition-colors duration-200">アイテム</button>
+            <button id="tab-evolution" class="tab-button flex-1 py-2 font-bold transition-colors duration-200">進化</button>
+            <button id="tab-settings" class="tab-button flex-1 py-2 font-bold transition-colors duration-200">設定</button>
+        </div>
+        
+        <div id="shop" class="flex flex-col gap-3">
+             <button id="upgrade-click-btn" class="shop-item w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg">
+                <p class="text-lg">クリック強化</p>
+                <p class="text-sm">コインを使ってクリック性能を上げる</p>
+            </button>
+            <button id="upgrade-auto-clicker-btn" class="shop-item w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg">
+                <p class="text-lg">自動クリッカー強化</p>
+                <p class="text-sm">コインを使って自動クリックを強化</p>
+            </button>
+        </div>
+        
+        <div id="item-shop" class="hidden flex-col gap-3">
+             <button id="buy-fever" class="shop-item w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-yellow-800 text-black font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg">
+                <p class="text-lg">フィーバーポーション</p>
+                <p class="text-sm">30秒間、獲得EXP/Coinが2倍！</p>
+                <p class="text-sm">コスト: <span id="fever-cost">100</span> Coin</p>
+            </button>
+        </div>
+
+        <div id="evolution" class="hidden flex-col gap-3 text-center">
+            <p id="evolution-info" class="text-gray-400">特定のレベルに到達すると進化できます。</p>
+            <div id="evolution-options" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+
+        <div id="settings" class="hidden flex-col gap-3 text-center">
+            <button id="reset-button" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200">リセット</button>
+        </div>
+    </div>
+
+    <!-- 進化モーダル -->
+    <div id="evolution-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-2xl p-8 text-center shadow-2xl max-w-lg w-full modal-content">
+            <h2 class="text-3xl font-extrabold text-yellow-300 mb-4">進化の時！</h2>
+            <p id="evolution-modal-message" class="text-lg mb-6">スライムは新たな力を手に入れようとしています。どの姿に進化しますか？</p>
+            <div id="evolution-modal-options" class="grid grid-cols-1 gap-4"></div>
+        </div>
+    </div>
+    
+    <!-- 強化モーダル -->
+    <div id="upgrade-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-2xl p-6 text-center shadow-2xl max-w-sm w-full modal-content flex flex-col gap-4">
+            <h2 id="upgrade-modal-title" class="text-2xl font-extrabold text-yellow-300">強化</h2>
+            <p class="text-gray-300">何回強化しますか？</p>
+            <div class="grid grid-cols-3 gap-2">
+                <button data-amount="10" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">10回</button>
+                <button data-amount="30" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">30回</button>
+                <button data-amount="50" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">50回</button>
+                <button data-amount="100" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">100回</button>
+                <button data-amount="1000" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">1000回</button>
+                 <button data-amount="MAX" class="upgrade-amount-btn bg-gray-600 hover:bg-gray-700 p-2 rounded-lg">MAX</button>
+            </div>
+             <div class="flex items-center gap-2">
+                 <span class="font-bold">カスタム:</span>
+                <input type="number" id="upgrade-custom-amount" class="bg-gray-700 text-white p-2 rounded-lg w-full outline-none focus:ring-2 focus:ring-blue-500" placeholder="回数を入力...">
+            </div>
+            <div class="bg-gray-900 p-3 rounded-lg text-left">
+                <p>現在レベル: <span id="upgrade-current-level"></span></p>
+                <p>強化後レベル: <span id="upgrade-after-level"></span></p>
+                <p class="font-bold text-yellow-300 mt-2">合計コスト: 🪙 <span id="upgrade-total-cost">0</span></p>
+            </div>
+            <div class="flex gap-3">
+                <button id="cancel-upgrade-btn" class="w-full bg-gray-600 hover:bg-gray-700 font-bold py-3 rounded-lg">キャンセル</button>
+                <button id="confirm-upgrade-btn" class="w-full bg-green-500 hover:bg-green-600 font-bold py-3 rounded-lg disabled:opacity-50" disabled>強化する</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const gameData = {
+            exp: 0, level: 1, coins: 0, clickPower: 1, autoPower: 0, clickUpgradeCost: 25, 
+            slime: { id: 'baby', name: 'ベビースライム', color: '#3498db', eyeColor: '#ffffff' },
+            items: { autoClickerLevel: 0 },
+            boosts: { fever: { active: false, timeLeft: 0 } },
+            feverCost: 100, autoClickerCost: 250,
+            lastUpdate: new Date().getTime(), unlockedEvolutions: [], evolutionReady: false,
+        };
+
+        const slimes = {
+            baby: { name: 'ベビースライム', color: '#3498db', eyeColor: '#ffffff' },
+            metal: { name: 'メタルスライム', color: '#bdc3c7', eyeColor: '#2c3e50', description: 'クリック獲得EXPとCoinが1.5倍', apply: (gd) => { gd.clickPower = Math.ceil(gd.clickPower * 1.5); } },
+            king: { name: 'キングスライム', color: '#f1c40f', eyeColor: '#e67e22', description: '自動生成EXPとCoinが2倍', apply: (gd) => { gd.autoPower = Math.ceil(gd.autoPower * 2) || 2; } },
+            healing: { name: 'ヒーリングスライム', color: '#2ecc71', eyeColor: '#ffffff', description: 'アップグレードコストが10%減少', apply: (gd) => { gd.clickUpgradeCost = Math.ceil(gd.clickUpgradeCost * 0.9); gd.autoClickerCost = Math.ceil(gd.autoClickerCost * 0.9); } }
+        };
+
+        const evolutionTiers = { 10: ['metal', 'king', 'healing'] };
+        let currentUpgrade = { type: null, amount: 0 };
+
+        const getEl = (id) => document.getElementById(id);
+        const slimeEl = getEl('slime'), slimeContainerEl = getEl('slime-container'), expEl = getEl('exp'), coinsEl = getEl('coins'), levelEl = getEl('level'), clickPowerExpEl = getEl('click-power-exp'), clickPowerCoinEl = getEl('click-power-coin'), autoPowerExpEl = getEl('auto-power-exp'), autoPowerCoinEl = getEl('auto-power-coin'), slimeNameEl = getEl('slime-name'), expBarEl = getEl('exp-bar'), expToNextLevelEl = getEl('exp-to-next-level'), resetButton = getEl('reset-button');
+        const boostTimerEl = getEl('boost-timer'), feverTimeLeftEl = getEl('fever-time-left');
+        const feverCostEl = getEl('fever-cost'), buyFeverBtn = getEl('buy-fever');
+        const evolutionInfoEl = getEl('evolution-info'), evolutionOptionsEl = getEl('evolution-options'), evolutionModal = getEl('evolution-modal'), evolutionModalOptions = getEl('evolution-modal-options');
+        const tabs = { shop: getEl('shop'), itemShop: getEl('item-shop'), evolution: getEl('evolution'), settings: getEl('settings') };
+        const tabButtons = { shop: getEl('tab-shop'), itemShop: getEl('tab-item-shop'), evolution: getEl('tab-evolution'), settings: getEl('tab-settings') };
+        
+        // 新規モーダル要素
+        const upgradeModal = getEl('upgrade-modal'), upgradeModalTitle = getEl('upgrade-modal-title'), upgradeCustomAmount = getEl('upgrade-custom-amount'), upgradeCurrentLevel = getEl('upgrade-current-level'), upgradeAfterLevel = getEl('upgrade-after-level'), upgradeTotalCost = getEl('upgrade-total-cost'), cancelUpgradeBtn = getEl('cancel-upgrade-btn'), confirmUpgradeBtn = getEl('confirm-upgrade-btn');
+        const upgradeClickBtn = getEl('upgrade-click-btn'), upgradeAutoClickerBtn = getEl('upgrade-auto-clicker-btn');
+
+        function drawSlime(color, eyeColor, targetElement = slimeEl) {
+            targetElement.innerHTML = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><radialGradient id="slimeGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="30%"><stop offset="0%" style="stop-color:rgba(255,255,255,0.4)" /><stop offset="100%" style="stop-color:rgba(255,255,255,0)" /></radialGradient></defs><path d="M 10,70 C 10,40 40,20 50,20 C 60,20 90,40 90,70 Q 90,90 50,90 Q 10,90 10,70 Z" fill="${color}" /><circle cx="50" cy="50" r="40" fill="url(#slimeGradient)"/><circle cx="38" cy="55" r="5" fill="${eyeColor}" /><circle cx="62" cy="55" r="5" fill="${eyeColor}" /><path d="M 45,70 Q 50,80 55,70" stroke="${eyeColor}" stroke-width="2" fill="none" stroke-linecap="round" /></svg>`;
+        }
+
+        function updateUI() {
+            expEl.textContent = Math.floor(gameData.exp).toLocaleString();
+            coinsEl.textContent = Math.floor(gameData.coins).toLocaleString();
+            levelEl.textContent = gameData.level;
+            clickPowerExpEl.textContent = (gameData.clickPower).toLocaleString();
+            clickPowerCoinEl.textContent = (gameData.clickPower).toLocaleString();
+            
+            const autoClickerProduction = gameData.items.autoClickerLevel; // BUG FIX: Removed * gameData.clickPower
+            const passiveProduction = gameData.autoPower;
+            const totalAutoProduction = autoClickerProduction + passiveProduction;
+
+            autoPowerExpEl.textContent = totalAutoProduction.toLocaleString();
+            autoPowerCoinEl.textContent = totalAutoProduction.toLocaleString();
+
+            slimeNameEl.textContent = gameData.slime.name;
+            feverCostEl.textContent = gameData.feverCost.toLocaleString();
+            drawSlime(gameData.slime.color, gameData.slime.eyeColor);
+            buyFeverBtn.disabled = gameData.coins < gameData.feverCost || gameData.boosts.fever.active;
+            
+            if(gameData.boosts.fever.active) {
+                boostTimerEl.classList.remove('hidden');
+                feverTimeLeftEl.textContent = gameData.boosts.fever.timeLeft;
+            } else {
+                boostTimerEl.classList.add('hidden');
+            }
+            updateExpBar();
+            updateEvolutionTab();
+        }
+
+        function updateExpBar() {
+            const expForNextLevel = getExpForNextLevel(gameData.level);
+            const expForCurrentLevel = getExpForNextLevel(gameData.level - 1);
+            const currentLevelProgress = gameData.exp - expForCurrentLevel;
+            const neededForLevel = expForNextLevel - expForCurrentLevel;
+            const percentage = Math.max(0, Math.min(100, (currentLevelProgress / neededForLevel) * 100));
+            expBarEl.style.width = `${percentage}%`;
+            expToNextLevelEl.textContent = (expForNextLevel - Math.floor(gameData.exp)).toLocaleString();
+        }
+
+        function getExpForNextLevel(level) {
+            if (level <= 0) return 0;
+            return Math.floor(10 * Math.pow(1.2, level - 1));
+        }
+
+        function checkLevelUp() {
+            if (gameData.exp >= getExpForNextLevel(gameData.level)) {
+                gameData.level++;
+                createFloatingText("レベルアップ！", "text-yellow-300 text-2xl font-bold");
+                if (evolutionTiers[gameData.level] && !gameData.evolutionReady) {
+                    gameData.evolutionReady = true;
+                    showEvolutionModal();
+                }
+                updateExpBar();
+                updateEvolutionTab();
+            }
+        }
+        
+        function updateEvolutionTab() {
+            evolutionOptionsEl.innerHTML = '';
+            if (gameData.evolutionReady) {
+                evolutionInfoEl.textContent = `レベル${gameData.level}に到達！進化可能です！`;
+                evolutionInfoEl.classList.add('text-yellow-300', 'animate-pulse');
+                 const evolutions = evolutionTiers[gameData.level] || [];
+                 evolutions.forEach(evoId => {
+                    if(!gameData.unlockedEvolutions.includes(evoId)){
+                        const evo = slimes[evoId];
+                        const button = document.createElement('button');
+                        button.className = "shop-item w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg";
+                        button.innerHTML = `<p class="text-lg">進化: ${evo.name}</p><p class="text-sm">${evo.description}</p>`;
+                        button.onclick = () => evolve(evoId);
+                        evolutionOptionsEl.appendChild(button);
+                    }
+                 });
+                 if(evolutionOptionsEl.children.length === 0){
+                    evolutionInfoEl.textContent = 'このレベルでの進化は全て完了しました。';
+                    evolutionInfoEl.classList.remove('text-yellow-300', 'animate-pulse');
+                 }
+            } else {
+                const nextEvoLevel = Object.keys(evolutionTiers).find(level => level > gameData.level);
+                evolutionInfoEl.textContent = nextEvoLevel ? `次の進化はレベル${nextEvoLevel}です。` : '全ての進化を遂げました！';
+                evolutionInfoEl.classList.remove('text-yellow-300', 'animate-pulse');
+            }
+        }
+        function showEvolutionModal() {
+            evolutionModalOptions.innerHTML = '';
+            const evolutions = evolutionTiers[gameData.level] || [];
+            evolutions.forEach(evoId => {
+                if(!gameData.unlockedEvolutions.includes(evoId)) {
+                    const evo = slimes[evoId];
+                    const button = document.createElement('button');
+                    button.className = "w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 px-5 rounded-lg transition-all duration-200 shadow-lg text-left";
+                    button.innerHTML = `<p class="text-xl">${evo.name}</p><p class="text-base font-normal mt-1">${evo.description}</p>`;
+                    button.onclick = () => { evolve(evoId); evolutionModal.classList.add('hidden'); };
+                    evolutionModalOptions.appendChild(button);
+                }
+            });
+            evolutionModal.classList.remove('hidden');
+        }
+        function evolve(slimeId) {
+            if(!gameData.evolutionReady || gameData.unlockedEvolutions.includes(slimeId)) return;
+            const newSlime = slimes[slimeId];
+            createFloatingText(`${newSlime.name}に進化した！`, "text-purple-400 text-3xl font-extrabold");
+            gameData.slime = { ...gameData.slime, id: slimeId, ...newSlime };
+            newSlime.apply(gameData);
+            gameData.unlockedEvolutions.push(slimeId);
+            gameData.evolutionReady = false;
+            updateEvolutionTab();
+            updateUI();
+        }
+
+        function createFloatingText(text, className) {
+            const el = document.createElement('div');
+            el.textContent = text;
+            el.className = `floating-text font-bold ${className}`;
+            slimeContainerEl.appendChild(el);
+            setTimeout(() => el.remove(), 1400);
+        }
+
+        function performClick() {
+            const feverMultiplier = gameData.boosts.fever.active ? 2 : 1;
+            const clickExp = gameData.clickPower * feverMultiplier;
+            const clickCoin = gameData.clickPower * feverMultiplier;
+            gameData.exp += clickExp; gameData.coins += clickCoin;
+            createFloatingText(`+${clickExp.toLocaleString()} EXP`, 'text-blue-300 text-xl');
+            createFloatingText(`+${clickCoin.toLocaleString()} Coin`, 'text-yellow-300 text-xl' );
+            checkLevelUp(); updateUI();
+        }
+        
+        // --- 新しいアップグレードモーダルロジック ---
+        
+        function calculateBulkCost(type, amount) {
+            let totalCost = 0;
+            let currentCost;
+            let growthRate;
+
+            if (type === 'click') {
+                currentCost = gameData.clickUpgradeCost;
+                growthRate = 1.25;
+            } else { // autoClicker
+                currentCost = gameData.autoClickerCost;
+                growthRate = 1.75;
+            }
+            
+            for (let i = 0; i < amount; i++) {
+                totalCost += Math.ceil(currentCost);
+                currentCost *= growthRate;
+            }
+            return totalCost;
+        }
+        
+        function calculateMaxAmount(type) {
+            let amount = 0;
+            let totalCost = 0;
+            let currentCost;
+            let growthRate;
+            let myCoins = gameData.coins;
+
+            if (type === 'click') {
+                currentCost = gameData.clickUpgradeCost;
+                growthRate = 1.25;
+            } else { // autoClicker
+                currentCost = gameData.autoClickerCost;
+                growthRate = 1.75;
+            }
+            
+            while (totalCost + Math.ceil(currentCost) <= myCoins) {
+                totalCost += Math.ceil(currentCost);
+                currentCost *= growthRate;
+                amount++;
+            }
+            return amount;
+        }
+
+        function calculateBulkUpgradeResult(type, amount) {
+            let finalLevel;
+            if (type === 'click') {
+                finalLevel = gameData.clickPower;
+                for (let i = 0; i < amount; i++) {
+                    finalLevel += Math.ceil(finalLevel * 0.1) || 1;
+                }
+            } else { // autoClicker
+                finalLevel = gameData.items.autoClickerLevel + amount;
+            }
+            return finalLevel;
+        }
+
+        function updateUpgradeModalPreview(amount) {
+            if (!currentUpgrade.type) return;
+            currentUpgrade.amount = amount;
+            
+            const totalCost = calculateBulkCost(currentUpgrade.type, amount);
+            const finalLevel = calculateBulkUpgradeResult(currentUpgrade.type, amount);
+            
+            let currentLevel = 0;
+            if (currentUpgrade.type === 'click') {
+                currentLevel = gameData.clickPower;
+            } else {
+                currentLevel = gameData.items.autoClickerLevel;
+            }
+
+            upgradeCurrentLevel.textContent = currentLevel.toLocaleString();
+            upgradeAfterLevel.textContent = finalLevel.toLocaleString();
+            upgradeTotalCost.textContent = totalCost.toLocaleString();
+            
+            if (totalCost > gameData.coins || totalCost <= 0) {
+                confirmUpgradeBtn.disabled = true;
+            } else {
+                confirmUpgradeBtn.disabled = false;
+            }
+        }
+        
+        function showUpgradeModal(type) {
+            currentUpgrade.type = type;
+            upgradeCustomAmount.value = '';
+            
+            if (type === 'click') {
+                upgradeModalTitle.textContent = "クリック強化";
+            } else {
+                upgradeModalTitle.textContent = "自動クリッカー強化";
+            }
+            
+            updateUpgradeModalPreview(0);
+            upgradeModal.classList.remove('hidden');
+        }
+        
+        function executeUpgrade() {
+            const { type, amount } = currentUpgrade;
+            if (!type || amount <= 0) return;
+            
+            const totalCost = calculateBulkCost(type, amount);
+            if (gameData.coins < totalCost) return;
+            
+            gameData.coins -= totalCost;
+            
+            if (type === 'click') {
+                for (let i = 0; i < amount; i++) {
+                    gameData.clickPower += Math.ceil(gameData.clickPower * 0.1) || 1;
+                    gameData.clickUpgradeCost = Math.ceil(gameData.clickUpgradeCost * 1.25);
+                }
+            } else { // autoClicker
+                for (let i = 0; i < amount; i++) {
+                     gameData.items.autoClickerLevel++;
+                     gameData.autoClickerCost = Math.ceil(gameData.autoClickerCost * 1.75);
+                }
+            }
+            
+            upgradeModal.classList.add('hidden');
+            updateUI();
+        }
+
+        // --- イベントリスナー ---
+
+        slimeContainerEl.addEventListener('pointerdown', () => {
+            performClick();
+            slimeEl.classList.add('slime-clicked');
+            setTimeout(() => slimeEl.classList.remove('slime-clicked'), 100);
+        });
+
+        buyFeverBtn.addEventListener('click', () => {
+             if (gameData.coins >= gameData.feverCost && !gameData.boosts.fever.active) {
+                gameData.coins -= gameData.feverCost;
+                gameData.boosts.fever.active = true;
+                gameData.boosts.fever.timeLeft = 30;
+                updateUI();
+            }
+        });
+        
+        upgradeClickBtn.addEventListener('click', () => showUpgradeModal('click'));
+        upgradeAutoClickerBtn.addEventListener('click', () => showUpgradeModal('autoClicker'));
+        
+        document.querySelectorAll('.upgrade-amount-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const amountStr = btn.dataset.amount;
+                if (amountStr === 'MAX') {
+                    const maxAmount = calculateMaxAmount(currentUpgrade.type);
+                    upgradeCustomAmount.value = maxAmount;
+                    updateUpgradeModalPreview(maxAmount);
+                } else {
+                    const amount = parseInt(amountStr);
+                    upgradeCustomAmount.value = amount;
+                    updateUpgradeModalPreview(amount);
+                }
+            });
+        });
+        
+        upgradeCustomAmount.addEventListener('input', () => {
+            const amount = parseInt(upgradeCustomAmount.value) || 0;
+            updateUpgradeModalPreview(amount > 0 ? amount : 0);
+        });
+        
+        cancelUpgradeBtn.addEventListener('click', () => upgradeModal.classList.add('hidden'));
+        confirmUpgradeBtn.addEventListener('click', executeUpgrade);
+
+        Object.keys(tabButtons).forEach(key => {
+            tabButtons[key].addEventListener('click', () => {
+                Object.values(tabs).forEach(tab => tab.classList.add('hidden'));
+                Object.values(tabButtons).forEach(button => button.classList.remove('active'));
+                tabs[key].classList.remove('hidden'); tabButtons[key].classList.add('active');
+            });
+        });
+
+        resetButton.addEventListener('click', () => {
+            if (confirm('本当にすべてのデータをリセットしますか？この操作は元に戻せません。')) {
+                localStorage.removeItem('slimeGameSave'); location.reload();
+            }
+        });
+
+        function saveGame() {
+            gameData.lastUpdate = new Date().getTime();
+            localStorage.setItem('slimeGameSave', JSON.stringify(gameData));
+        }
+        function loadGame() {
+            const savedData = localStorage.getItem('slimeGameSave');
+            if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                Object.assign(gameData, parsedData);
+
+                // 古いセーブデータとの互換性のための堅牢なチェックを追加
+                if (!gameData.items) {
+                    gameData.items = { autoClickerLevel: 0 };
+                }
+                if (typeof gameData.items.autoClickerLevel !== 'number' || isNaN(gameData.items.autoClickerLevel)) {
+                    gameData.items.autoClickerLevel = 0;
+                }
+
+                const timeDiff = (new Date().getTime() - gameData.lastUpdate) / 1000;
+                
+                const autoClickerProduction = gameData.items.autoClickerLevel; // BUG FIX
+                const passiveProduction = gameData.autoPower;
+                const totalAutoProductionPerSecond = autoClickerProduction + passiveProduction;
+
+                const offlineGain = Math.floor(timeDiff * totalAutoProductionPerSecond * 0.25);
+
+                if (offlineGain > 0) {
+                    gameData.exp += offlineGain; gameData.coins += offlineGain;
+                    setTimeout(() => {
+                         createFloatingText(`放置ボーナス: +${offlineGain.toLocaleString()} EXP`, 'text-green-300 text-xl');
+                         createFloatingText(`+${offlineGain.toLocaleString()} Coin`, 'text-green-300 text-xl');
+                    }, 500);
+                }
+            }
+        }
+
+        // ゲームループ
+        setInterval(() => {
+            const feverMultiplier = gameData.boosts.fever.active ? 2 : 1;
+            
+            const passiveProduction = gameData.autoPower;
+            const autoClickerProduction = gameData.items.autoClickerLevel;
+            const totalAutoProductionPerSecond = passiveProduction + autoClickerProduction;
+
+            gameData.exp += (totalAutoProductionPerSecond * feverMultiplier) / 10;
+            gameData.coins += (totalAutoProductionPerSecond * feverMultiplier) / 10;
+
+            checkLevelUp(); 
+            updateUI();
+        }, 100);
+
+        setInterval(() => {
+            if (gameData.boosts.fever.active) {
+                gameData.boosts.fever.timeLeft--;
+                if(gameData.boosts.fever.timeLeft <= 0) gameData.boosts.fever.active = false;
+            }
+        }, 1000);
+        setInterval(saveGame, 5000);
+
+        window.onload = () => {
+            loadGame();
+            updateUI();
+        };
+    </script>
+</body>
+</html>
+
