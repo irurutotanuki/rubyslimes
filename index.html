@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>スライム進化ゲーム</title>
-    <script src="https://cdn/tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
     <style>
         body {
@@ -227,7 +227,7 @@
             clickPowerExpEl.textContent = (gameData.clickPower).toLocaleString();
             clickPowerCoinEl.textContent = (gameData.clickPower).toLocaleString();
             
-            const autoClickerProduction = gameData.items.autoClickerLevel; // BUG FIX: Removed * gameData.clickPower
+            const autoClickerProduction = gameData.items.autoClickerLevel * gameData.clickPower;
             const passiveProduction = gameData.autoPower;
             const totalAutoProduction = autoClickerProduction + passiveProduction;
 
@@ -547,7 +547,7 @@
 
                 const timeDiff = (new Date().getTime() - gameData.lastUpdate) / 1000;
                 
-                const autoClickerProduction = gameData.items.autoClickerLevel; // BUG FIX
+                const autoClickerProduction = gameData.items.autoClickerLevel * gameData.clickPower;
                 const passiveProduction = gameData.autoPower;
                 const totalAutoProductionPerSecond = autoClickerProduction + passiveProduction;
 
@@ -568,7 +568,7 @@
             const feverMultiplier = gameData.boosts.fever.active ? 2 : 1;
             
             const passiveProduction = gameData.autoPower;
-            const autoClickerProduction = gameData.items.autoClickerLevel;
+            const autoClickerProduction = gameData.items.autoClickerLevel * gameData.clickPower;
             const totalAutoProductionPerSecond = passiveProduction + autoClickerProduction;
 
             gameData.exp += (totalAutoProductionPerSecond * feverMultiplier) / 10;
